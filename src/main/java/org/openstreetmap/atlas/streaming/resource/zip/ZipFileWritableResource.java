@@ -29,9 +29,8 @@ public class ZipFileWritableResource extends ZipWritableResource
     @Override
     public Iterable<Resource> entries()
     {
-        try
+        try (ZipInputStream iteratorStream = getZipInputStream())
         {
-            final ZipInputStream iteratorStream = getZipInputStream();
             ZipEntry currentZipEntry;
             final List<Resource> resources = new ArrayList<>();
             while ((currentZipEntry = iteratorStream.getNextEntry()) != null)

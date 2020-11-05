@@ -15,7 +15,6 @@ import org.openstreetmap.atlas.geography.atlas.packed.PackedAtlas.AtlasSerializa
 import org.openstreetmap.atlas.proto.ProtoSerializable;
 import org.openstreetmap.atlas.proto.adapters.ProtoAdapter;
 import org.openstreetmap.atlas.streaming.CounterOutputStream;
-import org.openstreetmap.atlas.streaming.Streams;
 import org.openstreetmap.atlas.streaming.resource.ByteArrayResource;
 import org.openstreetmap.atlas.streaming.resource.File;
 import org.openstreetmap.atlas.streaming.resource.Resource;
@@ -277,11 +276,12 @@ public final class PackedAtlasSerializer
 
     private Object deserializeJavaResource(final Resource resource)
     {
-        try (ObjectInputStream input = new ObjectInputStream(decompress(resource.read())))
+        try (InputStream resourceStream = resource.read();
+                InputStream decompressedResourceStream = decompress(resourceStream);
+                ObjectInputStream input = new ObjectInputStream(decompressedResourceStream))
         {
             final Time start = Time.now();
             final Object result = input.readObject();
-            Streams.close(input);
             logger.trace("Loaded Field {} from {} in {}", resource.getName(), this.source,
                     start.elapsedSince());
             return result;

@@ -61,40 +61,42 @@ public class GeoJsonAtlasBuilder
 
     public Atlas create(final Resource geoJson)
     {
-        GeoJsonReader reader = new GeoJsonReader(geoJson);
         final AtlasBuilder builder = new PackedAtlasBuilder();
         final List<GeoJsonEdge> edges = new ArrayList<>();
         long nodeIdentifier = 0L;
-        reader.forEachRemaining(item ->
+        try (GeoJsonReader reader = new GeoJsonReader(geoJson))
         {
-            if (item.getItem() instanceof PolyLine && !(item.getItem() instanceof Polygon))
+            reader.forEachRemaining(item ->
             {
-                // We have an edge
-                Long identifier = null;
-                final Set<Map.Entry<String, JsonElement>> jsonTags = item.getProperties()
-                        .entrySet();
-                final Map<String, String> tags = new HashMap<>();
-                for (final Map.Entry<String, JsonElement> entry : jsonTags)
+                if (item.getItem() instanceof PolyLine && !(item.getItem() instanceof Polygon))
                 {
-                    final String key = entry.getKey();
-                    final String value = entry.getValue().getAsString();
-                    if (key.contains("@id"))
+                    // We have an edge
+                    Long identifier = null;
+                    final Set<Map.Entry<String, JsonElement>> jsonTags = item.getProperties()
+                            .entrySet();
+                    final Map<String, String> tags = new HashMap<>();
+                    for (final Map.Entry<String, JsonElement> entry : jsonTags)
                     {
-                        identifier = Long.valueOf(StringList.split(value, "/").get(1));
+                        final String key = entry.getKey();
+                        final String value = entry.getValue().getAsString();
+                        if (key.contains("@id"))
+                        {
+                            identifier = Long.valueOf(StringList.split(value, "/").get(1));
+                        }
+                        else
+                        {
+                            tags.put(key, value);
+                        }
                     }
-                    else
+                    if (!tags.containsKey("highway"))
                     {
-                        tags.put(key, value);
+                        // it was not an edge after all
+                        return;
                     }
+                    edges.add(new GeoJsonEdge(identifier, tags, (PolyLine) item.getItem()));
                 }
-                if (!tags.containsKey("highway"))
-                {
-                    // it was not an edge after all
-                    return;
-                }
-                edges.add(new GeoJsonEdge(identifier, tags, (PolyLine) item.getItem()));
-            }
-        });
+            });
+        }
         final Set<Location> locations = new HashSet<>();
         for (final GeoJsonEdge edge : edges)
         {
@@ -104,7 +106,7 @@ public class GeoJsonAtlasBuilder
         for (final Location location : locations)
         {
             // Node
-            builder.addNode(nodeIdentifier++, location, new HashMap<String, String>());
+            builder.addNode(nodeIdentifier++, location, new HashMap<>());
         }
         for (final GeoJsonEdge edge : edges)
         {
@@ -131,92 +133,94 @@ public class GeoJsonAtlasBuilder
                         edge.getTags());
             }
         }
-        reader = new GeoJsonReader(geoJson);
-        reader.forEachRemaining(item ->
+        try (GeoJsonReader reader = new GeoJsonReader(geoJson))
         {
-            if (item.getItem() instanceof Polygon)
+            reader.forEachRemaining(item ->
             {
-                // Area
-                Long identifier = null;
-                final Set<Map.Entry<String, JsonElement>> jsonTags = item.getProperties()
-                        .entrySet();
-                final Map<String, String> tags = new HashMap<>();
-                for (final Map.Entry<String, JsonElement> entry : jsonTags)
+                if (item.getItem() instanceof Polygon)
                 {
-                    final String key = entry.getKey();
-                    final String value = entry.getValue().getAsString();
-                    if (key.contains("@id"))
+                    // Area
+                    Long identifier = null;
+                    final Set<Map.Entry<String, JsonElement>> jsonTags = item.getProperties()
+                            .entrySet();
+                    final Map<String, String> tags = new HashMap<>();
+                    for (final Map.Entry<String, JsonElement> entry : jsonTags)
                     {
-                        identifier = Long.valueOf(StringList.split(value, "/").get(1));
+                        final String key = entry.getKey();
+                        final String value = entry.getValue().getAsString();
+                        if (key.contains("@id"))
+                        {
+                            identifier = Long.valueOf(StringList.split(value, "/").get(1));
+                        }
+                        else
+                        {
+                            tags.put(key, value);
+                        }
                     }
-                    else
+                    builder.addArea(identifier, (Polygon) item.getItem(), tags);
+                }
+                if (item.getItem() instanceof PolyLine && !(item.getItem() instanceof Polygon))
+                {
+                    // Line
+                    Long identifier = null;
+                    final Set<Map.Entry<String, JsonElement>> jsonTags = item.getProperties()
+                            .entrySet();
+                    final Map<String, String> tags = new HashMap<>();
+                    for (final Map.Entry<String, JsonElement> entry : jsonTags)
                     {
-                        tags.put(key, value);
+                        final String key = entry.getKey();
+                        final String value = entry.getValue().getAsString();
+                        if (key.contains("@id"))
+                        {
+                            identifier = Long.valueOf(StringList.split(value, "/").get(1));
+                        }
+                        else
+                        {
+                            tags.put(key, value);
+                        }
+                    }
+                    if (tags.containsKey("highway"))
+                    {
+                        // it was an edge after all
+                        return;
+                    }
+                    builder.addLine(identifier, (PolyLine) item.getItem(), tags);
+                }
+                if (item.getItem() instanceof Location)
+                {
+                    // Area
+                    Long identifier = null;
+                    final Set<Map.Entry<String, JsonElement>> jsonTags = item.getProperties()
+                            .entrySet();
+                    final Map<String, String> tags = new HashMap<>();
+                    for (final Map.Entry<String, JsonElement> entry : jsonTags)
+                    {
+                        final String key = entry.getKey();
+                        final String value = entry.getValue().getAsString();
+                        if (key.contains("@id"))
+                        {
+                            identifier = Long.valueOf(StringList.split(value, "/").get(1));
+                        }
+                        else
+                        {
+                            tags.put(key, value);
+                        }
+                    }
+                    try
+                    {
+                        builder.addPoint(identifier, (Location) item.getItem(), tags);
+                    }
+                    catch (final CoreException e)
+                    {
+                        if (!tags.isEmpty())
+                        {
+                            throw e;
+                        }
+                        // ignore. It is a duplicated node in GeoJson without any tags
                     }
                 }
-                builder.addArea(identifier, (Polygon) item.getItem(), tags);
-            }
-            if (item.getItem() instanceof PolyLine && !(item.getItem() instanceof Polygon))
-            {
-                // Line
-                Long identifier = null;
-                final Set<Map.Entry<String, JsonElement>> jsonTags = item.getProperties()
-                        .entrySet();
-                final Map<String, String> tags = new HashMap<>();
-                for (final Map.Entry<String, JsonElement> entry : jsonTags)
-                {
-                    final String key = entry.getKey();
-                    final String value = entry.getValue().getAsString();
-                    if (key.contains("@id"))
-                    {
-                        identifier = Long.valueOf(StringList.split(value, "/").get(1));
-                    }
-                    else
-                    {
-                        tags.put(key, value);
-                    }
-                }
-                if (tags.containsKey("highway"))
-                {
-                    // it was an edge after all
-                    return;
-                }
-                builder.addLine(identifier, (PolyLine) item.getItem(), tags);
-            }
-            if (item.getItem() instanceof Location)
-            {
-                // Area
-                Long identifier = null;
-                final Set<Map.Entry<String, JsonElement>> jsonTags = item.getProperties()
-                        .entrySet();
-                final Map<String, String> tags = new HashMap<>();
-                for (final Map.Entry<String, JsonElement> entry : jsonTags)
-                {
-                    final String key = entry.getKey();
-                    final String value = entry.getValue().getAsString();
-                    if (key.contains("@id"))
-                    {
-                        identifier = Long.valueOf(StringList.split(value, "/").get(1));
-                    }
-                    else
-                    {
-                        tags.put(key, value);
-                    }
-                }
-                try
-                {
-                    builder.addPoint(identifier, (Location) item.getItem(), tags);
-                }
-                catch (final CoreException e)
-                {
-                    if (!tags.isEmpty())
-                    {
-                        throw e;
-                    }
-                    // ignore. It is a duplicated node in GeoJson without any tags
-                }
-            }
-        });
+            });
+        }
         return builder.get();
     }
 }

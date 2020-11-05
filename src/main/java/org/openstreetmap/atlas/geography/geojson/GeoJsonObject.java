@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.openstreetmap.atlas.exception.CoreException;
-import org.openstreetmap.atlas.streaming.Streams;
 import org.openstreetmap.atlas.streaming.resource.WritableResource;
 
 import com.google.gson.Gson;
@@ -64,16 +63,14 @@ public class GeoJsonObject
 
     public void save(final WritableResource output)
     {
-        final BufferedWriter writer = new BufferedWriter(
-                new OutputStreamWriter(output.write(), StandardCharsets.UTF_8));
-        try
+        try (OutputStreamWriter outputStreamWriter = new OutputStreamWriter(output.write(),
+                StandardCharsets.UTF_8);
+                BufferedWriter writer = new BufferedWriter(outputStreamWriter))
         {
             writer.write(this.jsonObject.toString());
-            Streams.close(writer);
         }
         catch (final Exception e)
         {
-            Streams.close(writer);
             throw new CoreException("Could not save geojson object", e);
         }
     }

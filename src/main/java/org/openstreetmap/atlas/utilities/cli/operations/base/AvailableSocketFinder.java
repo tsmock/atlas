@@ -16,11 +16,9 @@ final class AvailableSocketFinder
     static int takePort()
     {
         Integer returnValue = null;
-        try
+        try (ServerSocket socket = new ServerSocket(0))
         {
-            final ServerSocket socket = new ServerSocket(0);
             returnValue = socket.getLocalPort();
-            socket.close();
         }
         catch (final IOException oops)
         {

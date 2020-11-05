@@ -46,13 +46,14 @@ public class SplittableInputStreamTest
     }
 
     @Test
-    public void splitTest()
+    public void splitTest() throws IOException
     {
-        final InputStream input = new StringInputStream("line1: blah\nline2: haha");
-        final SplittableInputStream split = new SplittableInputStream(input);
-        final InputStream in2 = split.split();
-        logger.info("{}", Iterables.asList(new InputStreamResource(() -> split).lines()));
-        logger.info("{}", Iterables.asList(new InputStreamResource(() -> in2).lines()));
-        Streams.close(split);
+        try (InputStream input = new StringInputStream("line1: blah\nline2: haha");
+                SplittableInputStream split = new SplittableInputStream(input);
+                InputStream in2 = split.split())
+        {
+            logger.info("{}", Iterables.asList(new InputStreamResource(() -> split).lines()));
+            logger.info("{}", Iterables.asList(new InputStreamResource(() -> in2).lines()));
+        }
     }
 }

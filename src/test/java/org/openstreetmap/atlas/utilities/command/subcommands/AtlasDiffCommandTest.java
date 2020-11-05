@@ -1,6 +1,7 @@
 package org.openstreetmap.atlas.utilities.command.subcommands;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.FileSystem;
 
@@ -12,7 +13,6 @@ import org.junit.Test;
 import org.openstreetmap.atlas.exception.CoreException;
 import org.openstreetmap.atlas.geography.atlas.Atlas;
 import org.openstreetmap.atlas.geography.atlas.change.diff.AtlasDiff;
-import org.openstreetmap.atlas.streaming.Streams;
 import org.openstreetmap.atlas.streaming.resource.File;
 
 import com.google.common.jimfs.Configuration;
@@ -60,9 +60,9 @@ public class AtlasDiffCommandTest
     private String atlas1to2Diff;
 
     @After
-    public void cleanup()
+    public void cleanup() throws IOException
     {
-        Streams.close(this.memoryFileSystem);
+        this.memoryFileSystem.close();
     }
 
     @Before

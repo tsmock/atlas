@@ -25,8 +25,9 @@ import com.google.gson.stream.JsonToken;
  *
  * @author matthieun
  */
-public class GeoJsonReader implements Iterator<PropertiesLocated>
+public class GeoJsonReader implements Iterator<PropertiesLocated>, AutoCloseable
 {
+    private static final String ERROR_READING_GEOJSON_STREAM = "Error reading GeoJson stream";
     private final InputStream input;
     private final JsonReader reader;
     private final Gson gson;
@@ -58,8 +59,22 @@ public class GeoJsonReader implements Iterator<PropertiesLocated>
         }
         catch (final Exception e)
         {
-            Streams.close(this.input);
-            throw new CoreException("Error reading GeoJson stream", e);
+            this.close();
+            throw new CoreException(ERROR_READING_GEOJSON_STREAM, e);
+        }
+    }
+
+    @Override
+    public void close()
+    {
+        try
+        {
+            this.input.close();
+            this.reader.close();
+        }
+        catch (final IOException closeException)
+        {
+            throw new CoreException(Streams.COULD_NOT_CLOSE_STREAM, closeException);
         }
     }
 
@@ -69,17 +84,17 @@ public class GeoJsonReader implements Iterator<PropertiesLocated>
         try
         {
             final boolean hasNext = this.reader.hasNext()
-                    && !this.reader.peek().equals(JsonToken.END_ARRAY);
+                    && JsonToken.END_ARRAY != this.reader.peek();
             if (!hasNext)
             {
-                Streams.close(this.input);
+                this.close();
             }
             return hasNext;
         }
         catch (final IOException e)
         {
-            Streams.close(this.input);
-            throw new CoreException("Error reading GeoJson stream", e);
+            this.close();
+            throw new CoreException(ERROR_READING_GEOJSON_STREAM, e);
         }
     }
 
@@ -121,8 +136,8 @@ public class GeoJsonReader implements Iterator<PropertiesLocated>
         }
         catch (final IOException e)
         {
-            Streams.close(this.input);
-            throw new CoreException("Error reading GeoJson stream", e);
+            this.close();
+            throw new CoreException(ERROR_READING_GEOJSON_STREAM, e);
         }
     }
 }

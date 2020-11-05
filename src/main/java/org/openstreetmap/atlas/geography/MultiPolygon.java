@@ -496,9 +496,10 @@ public class MultiPolygon
 
     public void saveAsGeoJson(final WritableResource resource)
     {
-        final JsonWriter writer = new JsonWriter(resource);
-        writer.write(asGeoJson());
-        writer.close();
+        try (JsonWriter writer = new JsonWriter(resource))
+        {
+            writer.write(asGeoJson());
+        }
     }
 
     @Override

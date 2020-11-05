@@ -1,10 +1,11 @@
 package org.openstreetmap.atlas.geography.sharding.preparation;
 
+import java.io.IOException;
 import java.util.Iterator;
 
+import org.openstreetmap.atlas.exception.CoreException;
 import org.openstreetmap.atlas.geography.Rectangle;
 import org.openstreetmap.atlas.geography.sharding.SlippyTile;
-import org.openstreetmap.atlas.streaming.Streams;
 import org.openstreetmap.atlas.streaming.resource.File;
 import org.openstreetmap.atlas.streaming.writers.SafeBufferedWriter;
 import org.openstreetmap.atlas.utilities.runtime.Command;
@@ -27,9 +28,11 @@ public class TilePrinter extends Command
     private static final Switch<File> OUTPUT_FOLDER = new Switch<>("output", "The output folder",
             value -> new File(value));
     private static final Switch<Integer> ZOOM_SWITCH = new Switch<>("zoom", "The zoom",
-            value -> Integer.valueOf(value));
+            Integer::valueOf);
     private static final Switch<String> USER = new Switch<>("user", "The user for the db",
-            value -> new String(value));
+            value -> value);
+
+    private static final String COULD_NOT_CLOSE_STREAM = "Could not close stream";
 
     private int index;
     private File folder;
@@ -48,69 +51,84 @@ public class TilePrinter extends Command
         this.folder = (File) command.get(OUTPUT_FOLDER);
         final String user = (String) command.get(USER);
         this.folder.mkdirs();
-        SafeBufferedWriter writer = getNextFile().writer();
-        writer.writeLine("CREATE SCHEMA sharding AUTHORIZATION " + user + ";");
-        writer.writeLine("DROP TABLE sharding.tiles;");
-        writer.writeLine(
-                "CREATE TABLE sharding.tiles(tile text, bounds geometry) WITH ( OIDS=FALSE );");
-        writer.writeLine("ALTER TABLE sharding.tiles OWNER TO " + user + ";");
-        writer.writeLine("DROP TABLE sharding.counts;");
-        writer.writeLine(
-                "CREATE TABLE sharding.counts(tile text, count integer) WITH ( OIDS=FALSE );");
-        writer.writeLine("ALTER TABLE sharding.counts OWNER TO " + user + ";");
+        try (SafeBufferedWriter writer = getNextFile().writer())
+        {
+            writer.writeLine("CREATE SCHEMA sharding AUTHORIZATION " + user + ";");
+            writer.writeLine("DROP TABLE sharding.tiles;");
+            writer.writeLine(
+                    "CREATE TABLE sharding.tiles(tile text, bounds geometry) WITH ( OIDS=FALSE );");
+            writer.writeLine("ALTER TABLE sharding.tiles OWNER TO " + user + ";");
+            writer.writeLine("DROP TABLE sharding.counts;");
+            writer.writeLine(
+                    "CREATE TABLE sharding.counts(tile text, count integer) WITH ( OIDS=FALSE );");
+            writer.writeLine("ALTER TABLE sharding.counts OWNER TO " + user + ";");
+        }
+        catch (final IOException e)
+        {
+            throw new CoreException(COULD_NOT_CLOSE_STREAM, e);
+        }
 
         final Iterator<SlippyTile> tileIterator = SlippyTile.allTilesIterator(this.zoom,
                 Rectangle.MAXIMUM);
         while (tileIterator.hasNext())
         {
-            Streams.close(writer);
-            writer = getNextFile().writer();
-            writer.writeLine("INSERT INTO sharding.tiles(tile, bounds) VALUES ");
-            SlippyTile tile = null;
-            int counter = 0;
-            while (tileIterator.hasNext() && counter < MAX_SHARDS_PER_FILE)
+            try (SafeBufferedWriter writer = getNextFile().writer())
             {
-                tile = tileIterator.next();
-                final Rectangle bounds = tile.bounds();
-                writer.write("(\'" + tile.getName() + "\', ST_MakeEnvelope("
-                        + bounds.lowerLeft().getLongitude().asDegrees() + ","
-                        + bounds.lowerLeft().getLatitude().asDegrees() + ","
-                        + bounds.upperRight().getLongitude().asDegrees() + ","
-                        + bounds.upperRight().getLatitude().asDegrees() + ",4326))");
-                counter++;
-                if (tileIterator.hasNext() && counter < MAX_SHARDS_PER_FILE)
+                writer.writeLine("INSERT INTO sharding.tiles(tile, bounds) VALUES ");
+                SlippyTile tile = null;
+                int counter = 0;
+                while (tileIterator.hasNext() && counter < MAX_SHARDS_PER_FILE)
                 {
-                    writer.write(",");
+                    tile = tileIterator.next();
+                    final Rectangle bounds = tile.bounds();
+                    writer.write("(\'" + tile.getName() + "\', ST_MakeEnvelope("
+                            + bounds.lowerLeft().getLongitude().asDegrees() + ","
+                            + bounds.lowerLeft().getLatitude().asDegrees() + ","
+                            + bounds.upperRight().getLongitude().asDegrees() + ","
+                            + bounds.upperRight().getLatitude().asDegrees() + ",4326))");
+                    counter++;
+                    if (tileIterator.hasNext() && counter < MAX_SHARDS_PER_FILE)
+                    {
+                        writer.write(",");
+                    }
+                    else
+                    {
+                        writer.write(";");
+                    }
+                    writer.write("\n");
                 }
-                else
-                {
-                    writer.write(";");
-                }
-                writer.write("\n");
+            }
+            catch (final IOException e)
+            {
+                throw new CoreException(COULD_NOT_CLOSE_STREAM, e);
             }
         }
-        Streams.close(writer);
-        writer = getNextFile().writer();
-        writer.writeLine("CREATE OR REPLACE FUNCTION countForTiles() RETURNS void AS $$");
-        writer.writeLine("DECLARE");
-        writer.writeLine("s_tile text;");
-        writer.writeLine("s_bounds geometry;");
-        writer.writeLine("s_count integer;");
-        writer.writeLine("n_count integer;");
-        writer.writeLine("BEGIN");
-        writer.writeLine("    FOR s_tile, s_bounds IN SELECT tile, bounds FROM sharding.tiles");
-        writer.writeLine("    LOOP");
-        writer.writeLine(
-                "        SELECT count(*) INTO s_count FROM public.ways WHERE ST_Intersects(s_bounds, linestring);");
-        writer.writeLine(
-                "        SELECT count(*) INTO n_count FROM public.nodes WHERE ST_Intersects(s_bounds, geom);");
-        writer.writeLine(
-                "        INSERT INTO sharding.counts(tile,count) VALUES (s_tile, s_count + n_count);");
-        writer.writeLine("    END LOOP;");
-        writer.writeLine("    RETURN;");
-        writer.writeLine("END");
-        writer.writeLine("$$ LANGUAGE 'plpgsql' ;");
-        Streams.close(writer);
+        try (SafeBufferedWriter writer = getNextFile().writer())
+        {
+            writer.writeLine("CREATE OR REPLACE FUNCTION countForTiles() RETURNS void AS $$");
+            writer.writeLine("DECLARE");
+            writer.writeLine("s_tile text;");
+            writer.writeLine("s_bounds geometry;");
+            writer.writeLine("s_count integer;");
+            writer.writeLine("n_count integer;");
+            writer.writeLine("BEGIN");
+            writer.writeLine("    FOR s_tile, s_bounds IN SELECT tile, bounds FROM sharding.tiles");
+            writer.writeLine("    LOOP");
+            writer.writeLine(
+                    "        SELECT count(*) INTO s_count FROM public.ways WHERE ST_Intersects(s_bounds, linestring);");
+            writer.writeLine(
+                    "        SELECT count(*) INTO n_count FROM public.nodes WHERE ST_Intersects(s_bounds, geom);");
+            writer.writeLine(
+                    "        INSERT INTO sharding.counts(tile,count) VALUES (s_tile, s_count + n_count);");
+            writer.writeLine("    END LOOP;");
+            writer.writeLine("    RETURN;");
+            writer.writeLine("END");
+            writer.writeLine("$$ LANGUAGE 'plpgsql' ;");
+        }
+        catch (final IOException e)
+        {
+            throw new CoreException(COULD_NOT_CLOSE_STREAM, e);
+        }
         return 0;
     }
 

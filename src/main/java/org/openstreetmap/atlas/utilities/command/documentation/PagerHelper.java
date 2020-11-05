@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.file.FileSystems;
 import java.util.Arrays;
 import java.util.Optional;
 
@@ -18,6 +19,45 @@ public class PagerHelper
     private static final String PAGER_ENVIRONMENT_VARIABLE = "ATLAS_SHELL_TOOLS_PAGER";
     private static final String PAGER_FALLBACK_VARIABLE = "PAGER";
     private static final String DEFAULT_PAGER = "less -cSRMis";
+
+    private static Optional<String> callWhichOnPager(final String pager)
+    {
+        final String whichProgram = "which";
+        final Process process;
+        try
+        {
+            process = new ProcessBuilder(whichProgram, pager).start();
+        }
+        catch (final IOException exception)
+        {
+            return Optional.empty();
+        }
+
+        String line = null;
+
+        try (InputStream stream = process.getInputStream();
+                InputStreamReader streamReader = new InputStreamReader(stream);
+                BufferedReader reader = new BufferedReader(streamReader))
+        {
+            line = reader.readLine();
+        }
+        catch (final IOException exception)
+        {
+            return Optional.empty();
+        }
+
+        if (line == null || line.isEmpty())
+        {
+            return Optional.empty();
+        }
+        return Optional.of(line);
+    }
+
+    private static String[] extractFlagsFromVariable(final String variable)
+    {
+        final String[] flags = variable.split("\\s+");
+        return Arrays.copyOfRange(flags, 1, flags.length);
+    }
 
     /**
      * Page a given string using the system paging program. Will check PAGER environment variable
@@ -52,7 +92,7 @@ public class PagerHelper
         File temporaryFile = null;
         try
         {
-            temporaryFile = File.temporary();
+            temporaryFile = File.temporary(FileSystems.getDefault());
         }
         catch (final Exception exception)
         {
@@ -93,44 +133,5 @@ public class PagerHelper
         {
             temporaryFile.delete();
         }
-    }
-
-    private Optional<String> callWhichOnPager(final String pager)
-    {
-        final String whichProgram = "which";
-        final Process process;
-        try
-        {
-            process = new ProcessBuilder(whichProgram, pager).start();
-        }
-        catch (final IOException exception)
-        {
-            return Optional.empty();
-        }
-
-        final InputStream stream = process.getInputStream();
-        final BufferedReader reader = new BufferedReader(new InputStreamReader(stream));
-        String line = null;
-
-        try
-        {
-            line = reader.readLine();
-        }
-        catch (final IOException exception)
-        {
-            return Optional.empty();
-        }
-
-        if (line == null || line.isEmpty())
-        {
-            return Optional.empty();
-        }
-        return Optional.of(line);
-    }
-
-    private String[] extractFlagsFromVariable(final String variable)
-    {
-        final String[] flags = variable.split("\\s+");
-        return Arrays.copyOfRange(flags, 1, flags.length);
     }
 }

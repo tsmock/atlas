@@ -65,10 +65,9 @@ public enum MinimumZoom
 
     private JsonArray parseConfig()
     {
-        try
+        try (InputStream inputStream = MinimumZoom.class.getResourceAsStream(CONFIG_RESOURCE);
+                InputStreamReader reader = new InputStreamReader(inputStream))
         {
-            final InputStream inputStream = MinimumZoom.class.getResourceAsStream(CONFIG_RESOURCE);
-            final InputStreamReader reader = new InputStreamReader(inputStream);
             final JsonParser parser = new JsonParser();
             final JsonElement element = parser.parse(reader);
             return element.getAsJsonArray();

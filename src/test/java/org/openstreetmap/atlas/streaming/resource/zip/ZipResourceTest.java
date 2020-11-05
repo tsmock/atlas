@@ -13,7 +13,6 @@ import java.util.zip.ZipFile;
 import org.junit.Assert;
 import org.junit.Test;
 import org.openstreetmap.atlas.exception.CoreException;
-import org.openstreetmap.atlas.streaming.Streams;
 import org.openstreetmap.atlas.streaming.compression.Compressor;
 import org.openstreetmap.atlas.streaming.resource.ByteArrayResource;
 import org.openstreetmap.atlas.streaming.resource.File;
@@ -148,9 +147,10 @@ public class ZipResourceTest
         final Resource oneResource = new StringResource(object.getOne()).withName("one");
         final Resource twoResource = new StringResource(object.getTwo()).withName("two");
 
-        final ObjectOutputStream out = new ObjectOutputStream(javaOutput.write());
-        out.writeObject(object);
-        Streams.close(out);
+        try (ObjectOutputStream out = new ObjectOutputStream(javaOutput.write()))
+        {
+            out.writeObject(object);
+        }
 
         new ZipWritableResource(zippedOutput).writeAndClose(oneResource, twoResource);
 

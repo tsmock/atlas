@@ -38,9 +38,10 @@ public final class GeoJsonSaver
 
     private static void save(final GeoJsonObject object, final WritableResource destination)
     {
-        final JsonWriter writer = new JsonWriter(destination);
-        writer.write(object.jsonObject());
-        writer.close();
+        try (JsonWriter writer = new JsonWriter(destination))
+        {
+            writer.write(object.jsonObject());
+        }
     }
 
     private GeoJsonSaver()

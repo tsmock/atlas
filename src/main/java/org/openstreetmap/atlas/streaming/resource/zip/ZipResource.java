@@ -28,7 +28,7 @@ public class ZipResource
     {
         private final Resource source;
         private final ZipInputStream input;
-        private ZipEntry nextEntry = null;
+        private ZipEntry nextEntry;
         private boolean doneReading = true;
 
         public ZipIterator(final Resource source)
@@ -40,7 +40,14 @@ public class ZipResource
         @Override
         public void close()
         {
-            Streams.close(this.input);
+            try
+            {
+                this.input.close();
+            }
+            catch (final IOException e)
+            {
+                throw new CoreException(Streams.COULD_NOT_CLOSE_STREAM, e);
+            }
         }
 
         @Override

@@ -14,7 +14,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.openstreetmap.atlas.exception.CoreException;
 import org.openstreetmap.atlas.streaming.resource.Resource;
@@ -102,6 +101,79 @@ public class StandardConfiguration implements Configuration
     private Map<String, Object> configurationData;
     private final String name;
 
+    @SuppressWarnings("unchecked")
+    private static Optional<Map<String, Object>> readConfigurationMapFromJSON(
+            final byte[] readBytes)
+    {
+        logger.info("Attempting to load configuration as JSON");
+        final ObjectMapper objectMapper = new ObjectMapper();
+        final SimpleModule simpleModule = new SimpleModule();
+        simpleModule.addDeserializer(Map.class, new ConfigurationDeserializer());
+        objectMapper.registerModule(simpleModule);
+        try (ByteArrayInputStream read = new ByteArrayInputStream(readBytes);
+                JsonParser parser = new JsonFactory().createParser(read))
+        {
+            final Map<String, Object> readConfig = objectMapper.readValue(parser, Map.class);
+            logger.info("Success! Loaded JSON configuration");
+            return Optional.of(readConfig);
+        }
+        catch (final Exception jsonReadException)
+        {
+            logger.warn("Unable to parse config file as JSON");
+            return Optional.empty();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Optional<Map<String, Object>> readConfigurationMapFromYAML(
+            final byte[] readBytes)
+    {
+        logger.info("Attempting to load configuration as YAML.");
+        try (ByteArrayInputStream read = new ByteArrayInputStream(readBytes);
+                YAMLParser parser = new YAMLFactory().createParser(read))
+        {
+            final ObjectMapper objectMapper = new ObjectMapper(new YAMLFactory());
+            final SimpleModule simpleModule = new SimpleModule();
+            simpleModule.addDeserializer(Map.class, new ConfigurationDeserializer());
+            objectMapper.registerModule(simpleModule);
+            final Map<String, Object> readConfig = objectMapper.readValue(parser, Map.class);
+            logger.info("Success! Loaded YAML configuration.");
+            return Optional.of(readConfig);
+        }
+        catch (final Exception yamlReadException)
+        {
+            logger.warn("Unable to parse config file as YAML");
+            return Optional.empty();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Object resolve(final String key, final Map<String, Object> currentContext)
+    {
+        if (StringUtils.isEmpty(key))
+        {
+            return currentContext;
+        }
+        final LinkedList<String> rootParts = new LinkedList<>(Arrays.asList(key.split("\\.")));
+        final LinkedList<String> childParts = new LinkedList<>();
+        while (!rootParts.isEmpty())
+        {
+            final String currentKey = String.join(DOT, rootParts);
+            final Object nextItem = currentContext.get(currentKey);
+            if (nextItem instanceof Map)
+            {
+                final String nextKey = String.join(DOT, childParts);
+                return resolve(nextKey, (Map<String, Object>) nextItem);
+            }
+            if (nextItem != null)
+            {
+                return nextItem;
+            }
+            childParts.addFirst(rootParts.removeLast());
+        }
+        return null;
+    }
+
     public StandardConfiguration(final Resource resource)
     {
         this(resource, ConfigurationFormat.UNKNOWN);
@@ -115,11 +187,11 @@ public class StandardConfiguration implements Configuration
         switch (configFormat)
         {
             case JSON:
-                this.configurationData = this.readConfigurationMapFromJSON(configBytes)
+                this.configurationData = readConfigurationMapFromJSON(configBytes)
                         .orElseThrow(() -> new CoreException("Unable to load JSON configuration."));
                 return;
             case YAML:
-                this.configurationData = this.readConfigurationMapFromYAML(configBytes)
+                this.configurationData = readConfigurationMapFromYAML(configBytes)
                         .orElseThrow(() -> new CoreException("Unable to load YAML configuration."));
                 return;
             case UNKNOWN:
@@ -128,8 +200,8 @@ public class StandardConfiguration implements Configuration
                 // until one finds some data
                 final Optional<Map<String, Object>> loadedConfigMap = Stream
                         .<Supplier<Optional<Map<String, Object>>>> of(
-                                () -> this.readConfigurationMapFromJSON(configBytes),
-                                () -> this.readConfigurationMapFromYAML(configBytes))
+                                () -> readConfigurationMapFromJSON(configBytes),
+                                () -> readConfigurationMapFromYAML(configBytes))
                         .map(Supplier::get).filter(Optional::isPresent).map(Optional::get)
                         .findFirst();
 
@@ -208,7 +280,7 @@ public class StandardConfiguration implements Configuration
             {
                 final String overrideKey = String.join(DOT, overrideKeyPrefixString, key);
                 final Optional<Object> specificOverrideData = Optional
-                        .ofNullable(this.resolve(overrideKey, currentContext));
+                        .ofNullable(resolve(overrideKey, currentContext));
                 if (specificOverrideData.isPresent())
                 {
                     overrideData.put(key, specificOverrideData.get());
@@ -227,81 +299,4 @@ public class StandardConfiguration implements Configuration
         }
         return Optional.of(overrideData).filter(data -> !data.isEmpty());
     }
-
-    @SuppressWarnings("unchecked")
-    private Optional<Map<String, Object>> readConfigurationMapFromJSON(final byte[] readBytes)
-    {
-        logger.info("Attempting to load configuration as JSON");
-        try (ByteArrayInputStream read = new ByteArrayInputStream(readBytes))
-        {
-            final ObjectMapper objectMapper = new ObjectMapper();
-            final SimpleModule simpleModule = new SimpleModule();
-            simpleModule.addDeserializer(Map.class, new ConfigurationDeserializer());
-            objectMapper.registerModule(simpleModule);
-            final JsonParser parser = new JsonFactory().createParser(read);
-            final Map<String, Object> readConfig = objectMapper.readValue(parser, Map.class);
-            logger.info("Success! Loaded JSON configuration");
-            return Optional.of(readConfig);
-        }
-        catch (final Exception jsonReadException)
-        {
-            logger.warn("Unable to parse config file as JSON");
-            return Optional.empty();
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private Optional<Map<String, Object>> readConfigurationMapFromYAML(final byte[] readBytes)
-    {
-        final ByteArrayInputStream read = new ByteArrayInputStream(readBytes);
-        logger.info("Attempting to load configuration as YAML.");
-        try
-        {
-            final ObjectMapper objectMapper = new ObjectMapper(new YAMLFactory());
-            final SimpleModule simpleModule = new SimpleModule();
-            simpleModule.addDeserializer(Map.class, new ConfigurationDeserializer());
-            objectMapper.registerModule(simpleModule);
-            final YAMLParser parser = new YAMLFactory().createParser(read);
-            final Map<String, Object> readConfig = objectMapper.readValue(parser, Map.class);
-            logger.info("Success! Loaded YAML configuration.");
-            return Optional.of(readConfig);
-        }
-        catch (final Exception yamlReadException)
-        {
-            logger.warn("Unable to parse config file as YAML");
-            return Optional.empty();
-        }
-        finally
-        {
-            IOUtils.closeQuietly(read);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private Object resolve(final String key, final Map<String, Object> currentContext)
-    {
-        if (StringUtils.isEmpty(key))
-        {
-            return currentContext;
-        }
-        final LinkedList<String> rootParts = new LinkedList<>(Arrays.asList(key.split("\\.")));
-        final LinkedList<String> childParts = new LinkedList<>();
-        while (!rootParts.isEmpty())
-        {
-            final String currentKey = String.join(DOT, rootParts);
-            final Object nextItem = currentContext.get(currentKey);
-            if (nextItem instanceof Map)
-            {
-                final String nextKey = String.join(DOT, childParts);
-                return resolve(nextKey, (Map<String, Object>) nextItem);
-            }
-            if (nextItem != null)
-            {
-                return nextItem;
-            }
-            childParts.addFirst(rootParts.removeLast());
-        }
-        return null;
-    }
-
 }

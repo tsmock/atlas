@@ -10,7 +10,6 @@ import java.util.Map;
 
 import org.apache.commons.lang3.StringEscapeUtils;
 import org.openstreetmap.atlas.exception.CoreException;
-import org.openstreetmap.atlas.streaming.Streams;
 import org.openstreetmap.atlas.streaming.resource.Resource;
 import org.openstreetmap.atlas.streaming.resource.WritableResource;
 import org.openstreetmap.atlas.utilities.collections.Iterables;
@@ -267,17 +266,14 @@ public class AtlasStatistics implements Iterable<AtlasStatistics.StatisticKey>, 
 
     public void save(final WritableResource writableResource)
     {
-        BufferedWriter out = null;
-        try
+        try (OutputStreamWriter outputStreamWriter = new OutputStreamWriter(
+                writableResource.write(), StandardCharsets.UTF_8);
+                BufferedWriter out = new BufferedWriter(outputStreamWriter))
         {
-            out = new BufferedWriter(
-                    new OutputStreamWriter(writableResource.write(), StandardCharsets.UTF_8));
             out.write(toString());
-            Streams.close(out);
         }
         catch (final Exception e)
         {
-            Streams.close(out);
             throw new CoreException("Could not save AtlasStatistics to {}", e, writableResource);
         }
     }

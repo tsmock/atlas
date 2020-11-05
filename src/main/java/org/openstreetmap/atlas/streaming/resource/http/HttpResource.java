@@ -167,9 +167,11 @@ public abstract class HttpResource extends AbstractResource
                 {
                     clientBuilder = clientBuilder.setProxy(this.proxy.get());
                 }
-                final CloseableHttpClient client = clientBuilder.build();
-                context = createBasicAuthCache(target, context);
-                this.response = client.execute(target, this.request, context);
+                try (CloseableHttpClient client = clientBuilder.build())
+                {
+                    context = createBasicAuthCache(target, context);
+                    this.response = client.execute(target, this.request, context);
+                }
             }
             if (this.response.getEntity() == null)
             {

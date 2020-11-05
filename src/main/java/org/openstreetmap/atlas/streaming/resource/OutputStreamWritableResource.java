@@ -1,5 +1,6 @@
 package org.openstreetmap.atlas.streaming.resource;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
@@ -10,13 +11,19 @@ import org.openstreetmap.atlas.exception.CoreException;
  *
  * @author matthieun
  */
-public class OutputStreamWritableResource extends AbstractWritableResource
+public class OutputStreamWritableResource extends AbstractWritableResource implements AutoCloseable
 {
     private final OutputStream out;
 
     public OutputStreamWritableResource(final OutputStream out)
     {
         this.out = out;
+    }
+
+    @Override
+    public void close() throws IOException
+    {
+        this.out.close();
     }
 
     @Override

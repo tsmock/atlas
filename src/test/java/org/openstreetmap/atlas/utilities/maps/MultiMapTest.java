@@ -8,7 +8,6 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.openstreetmap.atlas.geography.Polygon;
 import org.openstreetmap.atlas.geography.Rectangle;
-import org.openstreetmap.atlas.streaming.Streams;
 import org.openstreetmap.atlas.streaming.resource.ByteArrayResource;
 import org.openstreetmap.atlas.streaming.resource.WritableResource;
 
@@ -30,9 +29,10 @@ public class MultiMapTest
     {
         final MultiMap<Polygon, Polygon> map = getMultiMap();
         final WritableResource out = new ByteArrayResource();
-        final ObjectOutputStream outStream = new ObjectOutputStream(out.write());
-        outStream.writeObject(map);
-        Streams.close(outStream);
+        try (ObjectOutputStream outStream = new ObjectOutputStream(out.write()))
+        {
+            outStream.writeObject(map);
+        }
 
         try (ObjectInputStream inStream = new ObjectInputStream(out.read()))
         {

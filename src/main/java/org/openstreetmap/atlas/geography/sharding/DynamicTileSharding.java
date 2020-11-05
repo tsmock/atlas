@@ -1,6 +1,7 @@
 package org.openstreetmap.atlas.geography.sharding;
 
 import java.io.BufferedWriter;
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -26,7 +27,6 @@ import org.openstreetmap.atlas.geography.geojson.GeoJsonBuilder;
 import org.openstreetmap.atlas.geography.geojson.GeoJsonBuilder.LocationIterableProperties;
 import org.openstreetmap.atlas.geography.geojson.GeoJsonObject;
 import org.openstreetmap.atlas.geography.sharding.preparation.TilePrinter;
-import org.openstreetmap.atlas.streaming.Streams;
 import org.openstreetmap.atlas.streaming.resource.File;
 import org.openstreetmap.atlas.streaming.resource.Resource;
 import org.openstreetmap.atlas.streaming.resource.WritableResource;
@@ -247,17 +247,14 @@ public class DynamicTileSharding extends Command implements Sharding
 
         protected void save(final WritableResource resource)
         {
-            final BufferedWriter writer = resource.writer();
-            try
+            try (BufferedWriter writer = resource.writer())
             {
                 this.save(writer);
             }
-            catch (final Exception e)
+            catch (final IOException e)
             {
-                Streams.close(writer);
-                throw e;
+                throw new CoreException("Could not close stream", e);
             }
-            Streams.close(writer);
         }
 
         protected void split()
@@ -435,11 +432,12 @@ public class DynamicTileSharding extends Command implements Sharding
 
     public void saveAsGeoJson(final WritableResource resource)
     {
-        final JsonWriter writer = new JsonWriter(resource);
-        final GeoJsonObject geoJson = new GeoJsonBuilder().create(Iterables
-                .translate(this.root.leafNodes(Rectangle.MAXIMUM), Node::toGeoJsonBuildingBlock));
-        writer.write(geoJson.jsonObject());
-        writer.close();
+        try (JsonWriter writer = new JsonWriter(resource))
+        {
+            final GeoJsonObject geoJson = new GeoJsonBuilder().create(Iterables.translate(
+                    this.root.leafNodes(Rectangle.MAXIMUM), Node::toGeoJsonBuildingBlock));
+            writer.write(geoJson.jsonObject());
+        }
     }
 
     @Override

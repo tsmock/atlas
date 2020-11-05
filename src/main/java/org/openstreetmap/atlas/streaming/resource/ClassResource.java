@@ -42,11 +42,10 @@ public class ClassResource extends AbstractResource
      */
     public <T> T getJSONResourceObject(final Gson gson, final Type classType)
     {
-        InputStream input = null;
-        try
+        try (InputStream input = onRead();
+                InputStreamReader inputStreamReader = new InputStreamReader(input);
+                JsonReader reader = new JsonReader(inputStreamReader))
         {
-            input = onRead();
-            final JsonReader reader = new JsonReader(new InputStreamReader(onRead()));
             return gson.fromJson(reader, classType);
         }
         catch (final JsonIOException | JsonSyntaxException e)
@@ -54,9 +53,9 @@ public class ClassResource extends AbstractResource
             throw new CoreException("Failed to load json file from resource file {}", this.resource,
                     e);
         }
-        finally
+        catch (final IOException e)
         {
-            Streams.close(input);
+            throw new CoreException(Streams.COULD_NOT_CLOSE_STREAM, e);
         }
     }
 
@@ -83,10 +82,8 @@ public class ClassResource extends AbstractResource
      */
     public Properties getResourceAsPropertyFile()
     {
-        InputStream input = null;
-        try
+        try (InputStream input = onRead())
         {
-            input = onRead();
             final Properties props = new Properties();
             props.load(input);
             return props;
@@ -95,10 +92,6 @@ public class ClassResource extends AbstractResource
         {
             throw new CoreException("Failed to load properties from resource file {}",
                     this.resource, ioe);
-        }
-        finally
-        {
-            Streams.close(input);
         }
     }
 

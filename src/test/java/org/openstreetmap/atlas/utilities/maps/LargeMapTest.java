@@ -6,7 +6,6 @@ import java.util.Random;
 import org.junit.Assert;
 import org.junit.Test;
 import org.openstreetmap.atlas.exception.CoreException;
-import org.openstreetmap.atlas.streaming.Streams;
 import org.openstreetmap.atlas.streaming.resource.File;
 
 /**
@@ -31,16 +30,12 @@ public class LargeMapTest
         {
             map.put((long) i, random.nextLong());
         }
-        ObjectOutputStream out = null;
-        try
+        try (ObjectOutputStream out = new ObjectOutputStream(writableResource.write()))
         {
-            out = new ObjectOutputStream(writableResource.write());
             out.writeObject(map);
-            Streams.close(out);
         }
         catch (final Exception e)
         {
-            Streams.close(out);
             throw new CoreException("Could not save to {}", e, writableResource);
         }
     }

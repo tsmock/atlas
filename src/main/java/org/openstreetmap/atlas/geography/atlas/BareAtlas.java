@@ -42,7 +42,6 @@ import org.openstreetmap.atlas.geography.atlas.sub.SubAtlasCreator;
 import org.openstreetmap.atlas.geography.geojson.GeoJsonFeatureCollection;
 import org.openstreetmap.atlas.geography.geojson.GeoJsonUtils;
 import org.openstreetmap.atlas.proto.builder.ProtoAtlasBuilder;
-import org.openstreetmap.atlas.streaming.Streams;
 import org.openstreetmap.atlas.streaming.resource.WritableResource;
 import org.openstreetmap.atlas.streaming.writers.JsonWriter;
 import org.openstreetmap.atlas.utilities.collections.Iterables;
@@ -558,16 +557,14 @@ public abstract class BareAtlas implements Atlas
     @Override
     public void saveAsList(final WritableResource resource)
     {
-        final BufferedWriter writer = new BufferedWriter(
-                new OutputStreamWriter(resource.write(), StandardCharsets.UTF_8));
-        try
+        try (OutputStreamWriter outputStreamWriter = new OutputStreamWriter(resource.write(),
+                StandardCharsets.UTF_8);
+                BufferedWriter writer = new BufferedWriter(outputStreamWriter))
         {
             writer.write(this.toString());
-            Streams.close(writer);
         }
         catch (final IOException e)
         {
-            Streams.close(writer);
             throw new CoreException("Could not save atlas as list", e);
         }
     }

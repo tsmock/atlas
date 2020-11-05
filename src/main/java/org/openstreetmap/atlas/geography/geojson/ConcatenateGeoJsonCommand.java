@@ -69,9 +69,10 @@ public class ConcatenateGeoJsonCommand extends Command
         final Iterable<PropertiesLocated> jsonItems = readGeoJsonItems(mode, files, filePrefix);
         final GeoJsonObject result = new GeoJsonBuilder()
                 .createFeatureCollectionFromPropertiesLocated(jsonItems);
-        final JsonWriter writer = new JsonWriter(output);
-        writer.write(result.jsonObject());
-        writer.close();
+        try (JsonWriter writer = new JsonWriter(output))
+        {
+            writer.write(result.jsonObject());
+        }
         return 0;
     }
 
